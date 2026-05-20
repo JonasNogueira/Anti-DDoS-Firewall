@@ -1,0 +1,43 @@
+#include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
+#include <linux/if_ether.h>
+#include <linux/ip.h>
+#include <linux/in.h>
+
+struct
+{
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, __u32);
+    __type(value, __u8);
+} blacklist_map SEC(".maps");
+
+SEC("xdp")
+int firewall_handler(struct xdp_md *ctx)
+{
+    void *data = (void *)(long)ctx->data;
+    void *data_end = (void *)(long)ctx->data_end;
+
+    struct ethhdr *eth = data;
+    if ((void *)(eth + 1) > data_end)
+        return XDP_PASS;
+    if (eth->h_proto != __constant_htons(ETH_P_IP))
+        return XDP_PASS;
+
+    struct iphdr *iph = (void *)(eth + 1);
+    if ((void *)(iph + 1) > data_end)
+        return XDP_PASS;
+
+    __u32 src_ip = iph->saddr;
+    __u8 *blocked = bpf_map_lookup_elem(&blacklist_map, &src_ip);
+
+    if (blocked && *blocked == 1)
+    {
+        bpf_printk("BLOQUEADO: %pI4\n", &src_ip);
+        return XDP_DROP;
+    }
+
+    return XDP_PASS;
+}
+
+char LICENSE[] SEC("license") = "GPL";
