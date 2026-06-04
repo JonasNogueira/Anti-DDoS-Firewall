@@ -1,8 +1,14 @@
-#include <linux/bpf.h>
+#include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
-#include <linux/if_ether.h>
-#include <linux/ip.h>
-#include <linux/in.h>
+#include <bpf/bpf_tracing.h>
+
+#ifndef ETH_P_IP
+#define ETH_P_IP 0x0800
+#endif
+
+#ifndef bpf_htons
+#define bpf_htons(x) __builtin_bswap16(x)
+#endif
 
 struct
 {
@@ -21,7 +27,7 @@ int firewall_handler(struct xdp_md *ctx)
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) > data_end)
         return XDP_PASS;
-    if (eth->h_proto != __constant_htons(ETH_P_IP))
+    if (eth->h_proto != bpf_htons(ETH_P_IP))
         return XDP_PASS;
 
     struct iphdr *iph = (void *)(eth + 1);

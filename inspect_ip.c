@@ -1,8 +1,13 @@
-#include <linux/bpf.h>
+#include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
-#include <linux/if_ether.h> 
-#include <linux/ip.h>       
-#include <linux/in.h>       
+
+#ifndef ETH_P_IP
+#define ETH_P_IP 0x0800
+#endif
+
+#ifndef bpf_htons
+#define bpf_htons(x) __builtin_bswap16(x)
+#endif
 
 SEC("xdp")
 int inspect_packet(struct xdp_md *ctx)
@@ -15,7 +20,7 @@ int inspect_packet(struct xdp_md *ctx)
     if ((void *)(eth + 1) > data_end)
         return XDP_PASS;
 
-    if (eth->h_proto != __constant_htons(ETH_P_IP))
+    if (eth->h_proto != bpf_htons(ETH_P_IP))
         return XDP_PASS;
 
     struct iphdr *iph = (void *)(eth + 1);
@@ -24,6 +29,7 @@ int inspect_packet(struct xdp_md *ctx)
         return XDP_PASS;
 
     unsigned int src_ip = iph->saddr;
+    
     bpf_printk("Pacote recebido de: %pI4\n", &src_ip);
 
     return XDP_PASS;
